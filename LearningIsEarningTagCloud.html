@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.16/d3.min.js" charset="utf-8"></script>
+<script src="d3.cloud.js" charset="utf-8"></script>
+<script src="LearningIsEarning.jsonp" charset="utf-8"></script>
+
+<script>
+var stopwords = /^(i|me|my|myself|we|us|our|ours|ourselves|you|your|yours|yourself|yourselves|he|him|his|himself|she|her|hers|herself|it|its|itself|they|them|their|theirs|themselves|what|which|who|whom|whose|this|that|these|those|am|is|are|was|were|be|been|being|have|has|had|having|do|does|did|doing|will|would|should|can|could|ought|i'm|you're|he's|she's|it's|we're|they're|i've|you've|we've|they've|i'd|you'd|he'd|she'd|we'd|they'd|i'll|you'll|he'll|she'll|we'll|they'll|isn't|aren't|wasn't|weren't|hasn't|haven't|hadn't|doesn't|don't|didn't|won't|wouldn't|shan't|shouldn't|can't|cannot|couldn't|mustn't|let's|that's|who's|what's|here's|there's|when's|where's|why's|how's|a|an|the|and|but|if|or|because|as|until|while|of|at|by|for|with|about|against|between|into|through|during|before|after|above|below|to|from|up|upon|down|in|out|on|off|over|under|again|further|then|once|here|there|when|where|why|how|all|any|both|each|few|more|most|other|some|such|no|nor|not|only|own|same|so|than|too|very|say|says|said|shall)$/i;
+var fill = d3.scale.category20();
+var w = 800;
+var h = 600;
+
+function setup() {
+	var users = {};
+	allCards.forEach(function (card) {
+		if (!users[card.playerId]) {
+			users[card.playerId] = {
+				playerId: card.playerId,
+				playerName: card.playerName
+			};
+		}
+	});
+
+	document.getElementById("userControl");
+	userControl.innerHTML = "";
+
+	Object.keys(users).forEach(function (userId) {
+		var user = users[userId];
+		userControl.add(new Option(user.playerName, user.playerId));
+	});
+	userControl.addEventListener("change", selectionChanged);
+}
+
+function selectionChanged() {
+    document.getElementById("host").innerHTML = "";
+    var dropDown = document.getElementById("userControl");
+    var user = dropDown.options[dropDown.selectedIndex].value;
+
+    d3.layout.cloud().size([w, h])
+      .words(getWords(user))
+      .padding(5)
+      .rotate(function() { return ~~(Math.random() * 2) * 90; })
+      .font("Impact")
+      .fontSize(function(d) { return d.size; })
+      .on("end", draw)
+      .start();
+}
+
+function getWords(user) {
+    var maxWords = 250;
+
+    var userCards = allCards.filter(function (card) {
+    	return (card.playerId == user);
+    });
+    var wordFrequencies = userCards.map(function (card) {
+    	return card.responseText;
+    }).map(function (cardText) {
+    	return cardText.match(/[\#\w]+/g);
+    }).reduce(function (prevValue, wordsArray) {
+
+    	wordsArray.filter(function (word) {
+    		return !word.match(stopwords) && word.length >= 4;
+		}).forEach(function (word) {
+			if (prevValue[word]) {
+				prevValue[word]++;
+			}
+			else {
+				prevValue[word] = 1;
+			}
+		});
+    	return prevValue;
+    }, {});
+    var allWords = Object.keys(wordFrequencies);
+    allWords.sort(function (a, b) {
+    	return (wordFrequencies[b] - wordFrequencies[a]);
+    });
+	allWords.splice(maxWords);
+    var biggestWord = wordFrequencies[allWords[0]];
+    return allWords.map(function (word) {
+        return { text: word, size: 10 + (Math.pow(wordFrequencies[word] / biggestWord, 1.5)) * 90 };
+    });
+}
+
+function draw(words, bounds) {
+  scale = bounds ? Math.min(
+      w / Math.abs(bounds[1].x - w / 2),
+      w / Math.abs(bounds[0].x - w / 2),
+      h / Math.abs(bounds[1].y - h / 2),
+      h / Math.abs(bounds[0].y - h / 2)) / 2 : 1;
+
+    d3.select("#host").append("svg")
+        .attr("width", w)
+        .attr("height", h)
+        .attr("transform", "scale(" + scale + ")")
+      .append("g")
+        .attr("transform", "translate(400,300)")
+      .selectAll("text")
+        .data(words)
+      .enter().append("text")
+        .style("font-size", function(d) { return d.size + "px"; })
+        .style("font-family", "Impact")
+        .style("fill", function(d, i) { return fill(i); })
+        .attr("text-anchor", "middle")
+        .attr("transform", function(d) {
+          return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+        })
+        .text(function(d) { return d.text; });
+}
+</script>
+
+<body onload="setup();">
+    User: <select id="userControl"></select><br>
+    <div id="host">
+    </div>
+</body>
